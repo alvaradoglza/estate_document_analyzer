@@ -29,7 +29,7 @@ A Python application with a graphical user intefrace (GUI) that allows the user 
 | Area | Highlights |
 |------|------------|
 | **Extraction** | ▸ PyMuPDF text layer<br>▸ PDF Path if scanned |
-| **LLM Pipeline** | ▸ LangChain PromptTemplate + `PydanticOutputParser`<br>▸ OpenAI File upload input + PydanticOutputParser <br>▸ JSON validation|
+| **LLM Pipeline** | ▸ LangChain PromptTemplate + `PydanticOutputParser`<br>▸ OpenAI File upload input + `PydanticOutputParser` <br>▸ JSON validation|
 | **GUI** | ▸ One-file Streamlit app |
 | **Cost control** | ▸ Uploads file only when needed<br>▸ Truncate text to ~3 k tokens |
 
@@ -41,9 +41,9 @@ A Python application with a graphical user intefrace (GUI) that allows the user 
 git clone https://github.com/alvaradoglza/estate_document_analyzer.git
 cd estate-document-analyzer
 
-# 1. create venv + install deps (uses uv)
-uv venv .venv && . .venv/Scripts/activate  # Windows
-uv pip sync requirements.lock
+# 1. create venv + install deps (using uv)
+uv venv .venv && . .venv/Scripts/activate  
+uv sync
 
 # 2. set your key
 echo OPENAI_API_KEY=sk-... >> .env
@@ -105,4 +105,4 @@ graph TD;
 - Model sees & extracts in one pass → same `EstateInfo`  
 
 ## License
-Unsure what to write here but common field on readme.md according to 
+Unsure what to write here but common field on readme.md according to content on the web.
