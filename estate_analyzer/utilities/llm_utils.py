@@ -1,48 +1,30 @@
 """
-estate_analyzer.utilities.llm_utils
-* If the PDF has text layer send that text to GPT-4o-mini.
-* If not, send the pdf as a file to GPT-4o-mini.
+estate_analyzer.utilities.llm_utils  
 
-Returned object is validated by Pydantic.
+    analyze_document(pdf_path: str | Path) -> EstateInfo
 """
 
 from __future__ import annotations
-
-import json
-import os
 from pathlib import Path
 from textwrap import shorten
-from typing import Annotated, Literal
 
-import openai
-from pydantic import BaseModel, Field, ValidationError
+from estate_analyzer.utilities.pdf_utils import extract_text
+from estate_analyzer.utilities.langchain_chain import get_estate_chain
+from estate_analyzer.utilities.llm_schema import EstateInfo
 
-from estate_analyzer.utilities.pdf_utils import extract_text_from_pdf, PDFData
 
-class EstateInfo(BaseModel):
-    client_name: Annotated[str, Field(..., alias="clientName")]
-    client_address: Annotated[str, Field(..., alias="clientAddress")]
-    document_date: Annotated[str, Field(..., alias="documentDate")]
-    title: str
-    summary: str
-    n_pages: int
+def analyze_document(pdf_path: str | Path) -> EstateInfo:
+    pdf_path = Path(pdf_path).expanduser().resolve()
+    pdf_data = extract_text(pdf_path)
 
-    @staticmethod
-    def json_schema() -> str:
+    chain = get_estate_chain(has_text=pdf_data.has_text_layer)
 
-        """ Return a compact JSON string for the prompt. """
-        example = {
-            "clientName": "Claudia Sheinbaum",
-            "clientAddress": "Los Pinos, Mexico City",
-            "documentDate": "2023-10-01",
-            "title": "Last Will and Testament",
-            "summary": "This is a summary of the document.",
-            "n_pages": 5,
-        }
-        return json.dumps(example)
-    
-SYSTEM_MSG = (" You are a legal-document extraction engine. "
-              " Return ONLY valid JSON matching the schema given."
-              " Do not wrap it in markdown or prose. ")
+    if pdf_data.has_text_layer:
+        short_text = shorten(pdf_data.text, width=12000, placeholder=" […] ")
+        raw = chain.invoke({"document_text": short_text})
+    else:
+        raw = chain({"pdf_path": pdf_path})
 
-USER_TEMPLATE
+    # chain already returns a validated EstateInfo object
+    info: EstateInfo = raw.copy(update={"n_pages": pdf_data.n_pages or raw.n_pages})
+    return info
