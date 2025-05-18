@@ -1,17 +1,13 @@
 """
 estate_analyzer.utilities.langchain_chain
 
+* Provide two strategies for document extraction:
+    - Text-chain : use existing text layer
+    - PDF-chain : upload the PDF to OpenAI and use visual input
+* The caller receives a callable object that returns an EstateInfo regardless the strategy
 
-A LangChain Runnable for estate-document
-information extraction.
-
-
-* If `has_text` is True then chain does {"text": str}
-* If `has_text` is False then chain does {"pdf_path": Path}
-
-The chain:
-
-    PromptTemplate goes to ChatOpenAI then PydanticOutputParser
+Raises:
+ - openai.OpenAIError
 """
 
 from __future__ import annotations
@@ -21,9 +17,8 @@ from textwrap import shorten
 from typing import Any, Dict
 
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.messages import SystemMessage, HumanMessage
 from openai import OpenAI 
 
 from estate_analyzer.utilities.llm_schema import EstateInfo
@@ -41,7 +36,13 @@ SYSTEM_MSG = (
 )
 
 def _text_chain() -> Any:
-    """Return a chain that takes plain text."""
+    """ 
+    Build a LangChain runnable for PDFs with text layer
+    
+    Returns:
+        Pipeline: PromptTemplate | llm | PydanticOutputParser
+    """
+
     parser = PydanticOutputParser(pydantic_object=EstateInfo)
 
     user_template = (
@@ -64,15 +65,32 @@ def _text_chain() -> Any:
     return prompt | llm | parser
 
 def _pdf_chain() -> Any:
+    """
+    Build a simple callable for scanned PDFs
+    
+    Returns:
+        Callable: function that takes a PDF path and returns an EstateInfo object
+    """
     parser = PydanticOutputParser(pydantic_object=EstateInfo)
 
     user_prompt = (
-        "Extract clientName, clientAddress, documentDate, title, summary, n_pages "
-        "from the attached PDF. Respond ONLY with JSON exactly like this example:\n"
+        "Extract the following fields from the estate document text below:\n"
+        "- clientName - clientAddress - documentDate - title - summary - n_pages\n\n"
+        "Respond ONLY with JSON exactly like this example:\n"
         "{schema}"
     ).format(schema=EstateInfo.json_schema(indent=0))
 
     def _invoke(inputs: Dict[str, Any]) -> EstateInfo:
+        """
+        Upload the PDF to OpenAI and call the LLM with the file_id and user prompt.
+
+        Args:
+            inputs: Dictionary containing the PDF path.
+        
+        Returns:
+            EstateInfo: Pydantic validated dataclass with extracted fields
+        """
+
         pdf_path: Path = inputs["pdf_path"]
 
         client = OpenAI()
@@ -105,10 +123,29 @@ def _pdf_chain() -> Any:
     return _invoke
 
 def _upload_file(path: Path) -> str:
-    """Upload the PDF once, return its file_id."""
+    """
+    Upload file path to OpenAI Files API
+    
+    Args:
+        path
+        
+    Returns:
+        the file_id returned by OpenAI
+    """
+
     client = OpenAI()
     up = client.files.create(file=path.open("rb"), purpose="user_data")
     return up.id
 
 def get_estate_chain(has_text: bool):
+    """
+    Decide which chain to use based on the PDF type
+    
+    Args:
+        has_text: bool: True if the PDF has a text layer, False otherwise.
+        
+    Returns:
+        Callable | Runnable: LangChain chain or callable function
+    """
+
     return _text_chain() if has_text else _pdf_chain()
